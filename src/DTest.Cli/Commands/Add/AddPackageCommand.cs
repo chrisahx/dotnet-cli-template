@@ -1,17 +1,18 @@
 using System.ComponentModel;
 using DTest.Commands.Shared;
 using DTest.Services;
+using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace DTest.Commands.Add;
 
-internal class AddPackageCommand(IPackageService packageService) : Command<AddPackageCommand.Settings>
+internal class AddPackageCommand(IAnsiConsole console, IPackageService packageService) : Command<AddPackageCommand.Settings>
 {
     public class Settings : GlobalSettings
     {
-        [CommandArgument(0, "<name>")]
+        [CommandArgument(0, "[name]")]
         [Description("The package name to add")]
-        public string PackageName { get; init; } = string.Empty;
+        public string? PackageName { get; init; }
 
         [CommandOption("--version")]
         [Description("The packasge version (defaults: latest)")]
@@ -21,17 +22,28 @@ internal class AddPackageCommand(IPackageService packageService) : Command<AddPa
   
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellation)
     {
+        var packageName = Console.IsInputRedirected
+            ? Console.In.ReadToEnd().Trim()
+            : settings.PackageName;
+
+        if (string.IsNullOrWhiteSpace(packageName))
+        {
+            throw new NullReferenceException("Provide a package name as an argument or through stdin.");
+        }
+
         var version = settings.Version ?? "latest";
-  
+
         if (settings.Verbose)
         {
-            System.Console.WriteLine($"Searching for package {settings.PackageName}...");
-            System.Console.WriteLine($"Resolving version {version}...");
-            System.Console.WriteLine($"Installing to ./packages...");
-        }
-  
-        System.Console.WriteLine($"Added package {settings.PackageName} v{version}");
-        System.Console.WriteLine(packageService.CheckPackage(settings.PackageName, version));
+            console.MarkupLine( $"Searching for package [yellow]{Markup.Escape(packageName)}[/]...");
+         }
+
+        console.MarkupLine(
+            $"[green]Added[/] package {Markup.Escape(packageName)} v{Markup.Escape(version)}");
+
+        console.MarkupLine(
+            $"[green] {packageService.CheckPackage(packageName, version)} [/]");
+
         return 0;
     }
 }
